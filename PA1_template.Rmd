@@ -23,7 +23,7 @@ activity.data <- read.csv(dataset.csvfile)
 
 ## What is mean total number of steps taken per day?
 
-Using dplyr for grouping and aggregation. Tranform date from factor to Posixlt type. Using ggplot contruct histogram of steps by date.
+Using dplyr for grouping and aggregation. Tranform date from factor to Posixlt type. Using ggplot contruct histogram of steps by date. Finally display total, mean and median by date.
 
 ```{r}
 library(dplyr)
@@ -56,13 +56,58 @@ interval_means <- activity.data %>%
     select(Interval = interval, Mean, Median)
 
 pm <- ggplot(interval_means, aes(x=Interval, y=Mean))
-pm + geom_line()
+pm + geom_line() + labs(title = "Average Steps By Interval", y = "Avg Steps")
 
 filter(interval_means, Mean == max(interval_means$Mean))
 ```
 
 ## Imputing missing values
 
+The number of rows with missing data are:
 
+```{r}
+nrow(filter(activity.data, is.na(steps)))
+```
+
+Impute values using the mean for the corresponding interval and merge into original data set. Again plot historgram and table with Total, Mean and Median by date.
+
+```{r}
+imputed_activity_data <- select(interval_means, Interval, IntervalMean = Mean) %>%
+    inner_join(activity.data, by = c("Interval" = "interval")) %>%
+    mutate(steps = ifelse(is.na(steps), IntervalMean, steps)) %>%
+    select(Interval, Steps = steps, Date = date)
+
+imputed_total_steps_by_date <- imputed_activity_data %>% 
+    group_by(Date) %>%
+    summarise(Count = n(), Total = sum(Steps), 
+              Mean = mean(Steps, na.rm = TRUE), 
+              Median = median(Steps, na.rm = TRUE)) %>%
+    transform(Date = strptime(Date, "%Y-%m-%d"))
+
+ph_imputed <- ggplot(imputed_total_steps_by_date, aes(x=Date, y=Total))
+ph_imputed + geom_histogram(stat="identity") +
+    labs(title = "Total Steps By Day (Imputed Values)", x = "Day", y = "Total Steps")
+
+imputed_total_steps_by_date
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Using imputed activity data, construct a factor for weekend/weekday, note we don't carry through the PosixDate field as it is unsupported by dplyr.
+
+Then group the data by Weekday and Interval and plot it, using facet.
+
+```{r}
+activity_data_with_weekday <- imputed_activity_data %>%
+    transform(PosixDate = strptime(Date, "%Y-%m-%d")) %>%
+    mutate(Weekday = factor(!grepl("Sat|Sun", weekdays(PosixDate, abbreviate = TRUE)), labels = c("weekend", "weekday"))) %>%
+    select(Date, Interval, Steps, Weekday)
+
+interval_means_with_weekday <- activity_data_with_weekday %>%
+    group_by(Weekday, Interval) %>%
+    summarise(Mean = round(mean(Steps, 0))) %>%
+    select(Interval, Mean, Weekday)
+
+p_by_weekday <- ggplot(interval_means_with_weekday, aes(x=Interval, y=Mean))
+p_by_weekday + geom_line() + facet_grid(. ~ Weekday) + labs(title = "Average Steps By Interval", y = "Avg Steps")
+```
