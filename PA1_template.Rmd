@@ -5,18 +5,61 @@ output:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
 
+The base dataset is in zip file. Ensure we have it extracted and read it into data frame. Aslo setup some default knitr options.
 
+```{r}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+
+dataset.zipfile <- file.path(".", "activity.zip")
+dataset.csvfile <- file.path(".", "activity.csv")
+
+if (!file.exists(dataset.csvfile)) {
+    unzip(dataset.zipfile)
+}
+activity.data <- read.csv(dataset.csvfile)
+```
 
 ## What is mean total number of steps taken per day?
 
+Using dplyr for grouping and aggregation. Tranform date from factor to Posixlt type. Using ggplot contruct histogram of steps by date.
 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+total_steps_by_date <- activity.data %>% 
+    group_by(date) %>%
+    summarise(Count = n(), Total = sum(steps), 
+              Mean = mean(steps, na.rm = TRUE), 
+              Median = median(steps, na.rm = TRUE)) %>%
+    transform(Date = strptime(date, "%Y-%m-%d")) %>%
+    select(Date, Count, Total, Mean, Median)
+
+p <- ggplot(total_steps_by_date, aes(x=Date, y=Total))
+p + geom_histogram(stat="identity") +
+    labs(title = "Total Steps By Day", x = "Day", y = "Total Steps")
+
+total_steps_by_date
+```
 
 ## What is the average daily activity pattern?
 
+Compute means for each interval across all days. Plot this, and display the interval with the maximum average number of steps.
 
+```{r}
+interval_means <- activity.data %>%
+    group_by(interval) %>%
+    summarise(Mean = round(mean(steps, na.rm = TRUE), 0), Median = median(steps, na.rm = TRUE)) %>%
+    select(Interval = interval, Mean, Median)
+
+pm <- ggplot(interval_means, aes(x=Interval, y=Mean))
+pm + geom_line()
+
+filter(interval_means, Mean == max(interval_means$Mean))
+```
 
 ## Imputing missing values
 
